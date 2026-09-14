@@ -18,5 +18,11 @@ function getModo(): string
 function setModo(string $modo): void
 {
     $modo = $modo === MODE_SEGURO ? MODE_SEGURO : MODE_VULNERAVEL;
+
+    $dir = dirname(MODE_FILE);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0777, true);
+    }
+
     file_put_contents(MODE_FILE, $modo);
 }
