@@ -25,6 +25,24 @@ O projeto inclui as duas pontas lado a lado, alternáveis por um toggle:
 1. Inicie o Apache no painel do XAMPP.
 2. Acesse `http://localhost/session/` no navegador.
 
+## Deploy na Vercel
+
+A Vercel não tem runtime oficial de PHP, então o projeto usa o runtime
+comunitário [`vercel-php`](https://github.com/vercel-community/php),
+configurado em [vercel.json](vercel.json).
+
+1. Instale a CLI (`npm i -g vercel`) e rode `vercel` na raiz do projeto,
+   ou importe o repositório em vercel.com.
+2. Nenhuma variável de ambiente é necessária.
+
+**Limitação importante:** funções serverless da Vercel têm filesystem
+somente leitura (só `/tmp` é gravável) e instâncias efêmeras — por isso
+`includes/mode.php` grava o toggle "modo seguro" em `sys_get_temp_dir()`
+em vez de `data/mode.txt`. Isso funciona bem para uso individual, mas o
+estado (toggle e sessões PHP) pode não ser compartilhado entre
+instâncias diferentes sob carga concorrente ou após um cold start. Para
+a demo local via XAMPP isso não é um problema.
+
 ## Estrutura do projeto
 
 ```
