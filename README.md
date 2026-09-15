@@ -23,7 +23,7 @@ O projeto inclui as duas pontas lado a lado, alternáveis por um toggle:
 ## Como rodar
 
 1. Inicie o Apache no painel do XAMPP.
-2. Acesse `http://localhost/session/` no navegador.
+2. Acesse `http://localhost/session/api/` no navegador.
 
 ## Deploy na Vercel
 
@@ -34,12 +34,16 @@ configurado em [vercel.json](vercel.json).
 1. Instale a CLI (`npm i -g vercel`) e rode `vercel` na raiz do projeto,
    ou importe o repositório em vercel.com.
 2. Nenhuma variável de ambiente é necessária.
+3. A Vercel exige que os arquivos executados como Serverless Functions
+   fiquem dentro de uma pasta `api/` — por isso todo o código PHP está
+   em [api/](api/). O domínio raiz (`/`) redireciona automaticamente
+   para `/api/index.php`.
 
 **Limitação importante:** funções serverless da Vercel têm filesystem
 somente leitura (só `/tmp` é gravável) e instâncias efêmeras — por isso
-`includes/mode.php` grava o toggle "modo seguro" em `sys_get_temp_dir()`
-em vez de `data/mode.txt`. Isso funciona bem para uso individual, mas o
-estado (toggle e sessões PHP) pode não ser compartilhado entre
+[api/includes/mode.php](api/includes/mode.php) grava o toggle "modo
+seguro" em `sys_get_temp_dir()`. Isso funciona bem para uso individual,
+mas o estado (toggle e sessões PHP) pode não ser compartilhado entre
 instâncias diferentes sob carga concorrente ou após um cold start. Para
 a demo local via XAMPP isso não é um problema.
 
@@ -47,18 +51,22 @@ a demo local via XAMPP isso não é um problema.
 
 ```
 session/
-├── index.php              # Página inicial com o passo a passo da demo
-├── attacker.php           # Console do atacante
-├── login.php              # Formulário de login (ponto vulnerável)
-├── account.php            # Área autenticada ("Minha Conta")
-├── logout.php             # Encerra a sessão
-├── reset.php              # Reseta o estado da demo
-├── includes/
-│   ├── mode.php           # Lê/grava o modo (seguro | vulneravel)
-│   └── layout.php         # Cabeçalho/rodapé HTML compartilhado
-└── data/
-    └── mode.txt            # Estado do toggle, criado em runtime
+├── vercel.json            # Config do deploy na Vercel (runtime vercel-php)
+├── api/                   # Serverless Functions (exigido pela Vercel)
+│   ├── index.php          # Página inicial com o passo a passo da demo
+│   ├── attacker.php       # Console do atacante
+│   ├── login.php          # Formulário de login (ponto vulnerável)
+│   ├── account.php        # Área autenticada ("Minha Conta")
+│   ├── logout.php         # Encerra a sessão
+│   ├── reset.php          # Reseta o estado da demo
+│   └── includes/
+│       ├── mode.php       # Lê/grava o modo (seguro | vulneravel)
+│       └── layout.php     # Cabeçalho/rodapé HTML compartilhado
 ```
+
+O estado do toggle "modo seguro" é gravado em `sys_get_temp_dir()`
+(fora do repositório), não em um arquivo versionado — veja
+[Deploy na Vercel](#deploy-na-vercel).
 
 ## Passo a passo do ataque
 
@@ -69,7 +77,7 @@ janelas de navegador separadas** (ex.: uma normal e uma anônima):
    (`attacker.php`). Ele gera um Session ID fixo (ex.:
    `ATACANTE-abc123`) e monta o link malicioso:
    ```
-   http://localhost/session/login.php?PHPSESSID=ATACANTE-abc123
+   http://localhost/session/api/login.php?PHPSESSID=ATACANTE-abc123
    ```
 2. Copie esse link e abra numa **janela anônima** — é você "no papel
    da vítima".
@@ -89,10 +97,10 @@ voltando para vulnerável).
 
 ## Onde está o problema e a defesa no código
 
-- **Vulnerabilidade** ([login.php](login.php)): antes de `session_start()`,
+- **Vulnerabilidade** ([api/login.php](api/login.php)): antes de `session_start()`,
   o código adota um `PHPSESSID` vindo da URL (`session_id($_GET['PHPSESSID'])`)
   sem questionar sua origem — é isso que permite a fixação.
-- **Defesa** ([login.php](login.php)): logo após validar as credenciais,
+- **Defesa** ([api/login.php](api/login.php)): logo após validar as credenciais,
   se o modo seguro estiver ativo, `session_regenerate_id(true)` troca o
   ID da sessão e descarta o antigo, tornando inútil qualquer ID fixado
   previamente pelo atacante.
