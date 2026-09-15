@@ -1,7 +1,5 @@
 <?php
 
-require_once __DIR__ . '/includes/mode.php';
-
 // Ação "verificar": o atacante força seu próprio navegador a usar o Session
 // ID que ele fixou na vítima, antes de iniciar qualquer sessão própria.
 if (isset($_GET['verificar'], $_GET['sid'])) {
@@ -23,12 +21,12 @@ if (empty($_SESSION['id_fixo'])) {
 }
 
 $idFixo = $_SESSION['id_fixo'];
-$baseUrl = 'http://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['PHP_SELF']), '/');
+$esquema = ($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://';
+$baseUrl = $esquema . $_SERVER['HTTP_HOST'];
 $linkMalicioso = $baseUrl . '/login.php?PHPSESSID=' . urlencode($idFixo);
 $linkVerificar = 'attacker.php?verificar=1&sid=' . urlencode($idFixo);
 $modo = getModo();
 
-require_once __DIR__ . '/includes/layout.php';
 render_header('Console do Atacante');
 ?>
 <div class="card">

@@ -17,13 +17,23 @@ O projeto inclui as duas pontas lado a lado, alternáveis por um toggle:
 
 ## Requisitos
 
-- XAMPP (Apache + PHP) instalado, com este projeto em `htdocs/session`.
-- PHP 7.3+ (usa `setcookie()` com array de opções).
+- PHP 7.3+ (usa `setcookie()` com array de opções) com o servidor
+  embutido (`php -S`), ou XAMPP/Apache se preferir.
 
 ## Como rodar
 
-1. Inicie o Apache no painel do XAMPP.
-2. Acesse `http://localhost/session/api/` no navegador.
+O projeto usa um front controller único (`api/index.php`), então rode o
+servidor embutido do PHP apontando para ele como *router script*:
+
+```
+php -S localhost:8000 -t api api/index.php
+```
+
+Acesse `http://localhost:8000/` no navegador.
+
+> Se preferir XAMPP/Apache, aponte o document root para `api/` e
+> configure um `.htaccess` com `mod_rewrite` reescrevendo todas as
+> requisições para `index.php` (mesmo padrão usado no `vercel.json`).
 
 ## Deploy na Vercel
 
@@ -36,32 +46,51 @@ configurado em [vercel.json](vercel.json).
 2. Nenhuma variável de ambiente é necessária.
 3. A Vercel exige que os arquivos executados como Serverless Functions
    fiquem dentro de uma pasta `api/` — por isso todo o código PHP está
-   em [api/](api/). O domínio raiz (`/`) redireciona automaticamente
-   para `/api/index.php`.
+   em [api/](api/).
+4. **Todas as rotas passam por uma única função** (`api/index.php`,
+   veja `rewrites` no `vercel.json`), que despacha internamente para
+   `api/pages/*.php` conforme o caminho da requisição. Isso é
+   necessário porque, na Vercel, cada arquivo PHP diferente casado por
+   `functions` vira uma Serverless Function **isolada, com seu próprio
+   `/tmp`**. Se `login.php` e `account.php` fossem funções separadas
+   (como numa primeira tentativa deste projeto), a sessão gravada por
+   uma nunca seria lida pela outra — o login simplesmente não
+   funcionava em produção. Consolidando tudo numa função só,
+   requisições sequenciais do mesmo visitante tendem a reaproveitar o
+   mesmo container "quente" e, portanto, compartilhar o `/tmp` onde o
+   PHP guarda as sessões.
 
-**Limitação importante:** funções serverless da Vercel têm filesystem
-somente leitura (só `/tmp` é gravável) e instâncias efêmeras — por isso
-[api/includes/mode.php](api/includes/mode.php) grava o toggle "modo
-seguro" em `sys_get_temp_dir()`. Isso funciona bem para uso individual,
-mas o estado (toggle e sessões PHP) pode não ser compartilhado entre
-instâncias diferentes sob carga concorrente ou após um cold start. Para
-a demo local via XAMPP isso não é um problema.
+**Limitação importante:** mesmo com uma função só, containers
+serverless são efêmeros e a Vercel pode escalar para múltiplas
+instâncias sob carga concorrente — sem garantia de reaproveitar o
+mesmo `/tmp` entre requisições. Por isso:
+- [api/includes/mode.php](api/includes/mode.php) grava o toggle "modo
+  seguro" em `sys_get_temp_dir()` (o filesystem do deploy em si é
+  somente leitura).
+- Em uso individual e sequencial (como a demo pretende), isso funciona
+  bem na prática. Sob tráfego concorrente real, o estado (toggle e
+  sessões PHP) pode ocasionalmente não ser compartilhado. Para uma
+  aplicação real isso pediria um armazenamento externo (Redis, banco,
+  Vercel KV); para esta demo didática, o trade-off foi mantido simples
+  de propósito.
 
 ## Estrutura do projeto
 
 ```
 session/
 ├── vercel.json            # Config do deploy na Vercel (runtime vercel-php)
-├── api/                   # Serverless Functions (exigido pela Vercel)
-│   ├── index.php          # Página inicial com o passo a passo da demo
-│   ├── attacker.php       # Console do atacante
-│   ├── login.php          # Formulário de login (ponto vulnerável)
-│   ├── account.php        # Área autenticada ("Minha Conta")
-│   ├── logout.php         # Encerra a sessão
-│   ├── reset.php          # Reseta o estado da demo
-│   └── includes/
-│       ├── mode.php       # Lê/grava o modo (seguro | vulneravel)
-│       └── layout.php     # Cabeçalho/rodapé HTML compartilhado
+└── api/                   # Serverless Functions (exigido pela Vercel)
+    ├── index.php          # Front controller: roteia pelo REQUEST_URI
+    ├── includes/
+    │   ├── mode.php       # Lê/grava o modo (seguro | vulneravel)
+    │   └── layout.php     # Cabeçalho/rodapé HTML compartilhado
+    └── pages/
+        ├── home.php       # Página inicial com o passo a passo da demo
+        ├── attacker.php   # Console do atacante
+        ├── login.php      # Formulário de login (ponto vulnerável)
+        ├── account.php    # Área autenticada ("Minha Conta")
+        ├── logout.php     # Encerra a sessão
+        └── reset.php      # Reseta o estado da demo
 ```
 
 O estado do toggle "modo seguro" é gravado em `sys_get_temp_dir()`
@@ -77,7 +106,7 @@ janelas de navegador separadas** (ex.: uma normal e uma anônima):
    (`attacker.php`). Ele gera um Session ID fixo (ex.:
    `ATACANTE-abc123`) e monta o link malicioso:
    ```
-   http://localhost/session/api/login.php?PHPSESSID=ATACANTE-abc123
+   http://localhost:8000/login.php?PHPSESSID=ATACANTE-abc123
    ```
 2. Copie esse link e abra numa **janela anônima** — é você "no papel
    da vítima".
@@ -97,10 +126,11 @@ voltando para vulnerável).
 
 ## Onde está o problema e a defesa no código
 
-- **Vulnerabilidade** ([api/login.php](api/login.php)): antes de `session_start()`,
-  o código adota um `PHPSESSID` vindo da URL (`session_id($_GET['PHPSESSID'])`)
-  sem questionar sua origem — é isso que permite a fixação.
-- **Defesa** ([api/login.php](api/login.php)): logo após validar as credenciais,
+- **Vulnerabilidade** ([api/pages/login.php](api/pages/login.php)): antes de
+  `session_start()`, o código adota um `PHPSESSID` vindo da URL
+  (`session_id($_GET['PHPSESSID'])`) sem questionar sua origem — é isso que
+  permite a fixação.
+- **Defesa** ([api/pages/login.php](api/pages/login.php)): logo após validar as credenciais,
   se o modo seguro estiver ativo, `session_regenerate_id(true)` troca o
   ID da sessão e descarta o antigo, tornando inútil qualquer ID fixado
   previamente pelo atacante.

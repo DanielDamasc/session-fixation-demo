@@ -1,10 +1,6 @@
 <?php
 
-require_once __DIR__ . '/includes/mode.php';
-
 session_start();
-
-require_once __DIR__ . '/includes/layout.php';
 
 if (empty($_SESSION['user'])) {
     header('Location: login.php');

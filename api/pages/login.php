@@ -1,7 +1,5 @@
 <?php
 
-require_once __DIR__ . '/includes/mode.php';
-
 // Ponto vulnerável: adota um Session ID vindo da URL antes de iniciar a
 // sessão. É assim que um app vulnerável a fixação de sessão aceita o ID
 // escolhido pelo atacante (equivalente ao efeito de session.use_trans_sid).
@@ -10,8 +8,6 @@ if (isset($_GET['PHPSESSID']) && preg_match('/^[a-zA-Z0-9,\-]{1,128}$/', $_GET['
 }
 
 session_start();
-
-require_once __DIR__ . '/includes/layout.php';
 
 $erro = '';
 

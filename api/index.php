@@ -1,36 +1,32 @@
 <?php
 
+// Front controller único: todas as rotas passam por esta mesma Serverless
+// Function (veja vercel.json). Isso é necessário porque, na Vercel, cada
+// arquivo PHP diferente vira uma função isolada com seu próprio /tmp — se
+// login.php e account.php fossem funções separadas, a sessão gravada em
+// uma nunca seria visível na outra. Concentrando tudo aqui, requisições
+// sequenciais do mesmo visitante tendem a cair no mesmo container "quente"
+// e, portanto, compartilhar o /tmp onde o PHP guarda as sessões.
+
 require_once __DIR__ . '/includes/mode.php';
-
-session_start();
-
 require_once __DIR__ . '/includes/layout.php';
-render_header('Demo: Ataque de Fixação de Sessão');
-?>
-<div class="card">
-    <p>Esta demo mostra, na prática, como um <strong>ataque de fixação de sessão
-    (session fixation)</strong> funciona: o atacante define de antemão o Session ID
-    que a vítima vai usar; se a aplicação não gerar um novo ID após o login, o
-    atacante consegue reaproveitar esse mesmo ID para assumir a sessão autenticada
-    da vítima.</p>
 
-    <p>Para acompanhar o ataque completo, você vai precisar de <strong>duas janelas
-    de navegador separadas</strong> (por exemplo, uma normal e uma anônima), já que
-    atacante e vítima precisam de cookies independentes:</p>
-    <ol>
-        <li>Na janela normal, abra o <a href="attacker.php">Console do Atacante</a> —
-            é você "no papel do atacante".</li>
-        <li>Copie o link malicioso gerado lá e abra numa <strong>janela anônima</strong>
-            — é você "no papel da vítima".</li>
-        <li>Faça login normalmente na janela anônima.</li>
-        <li>Volte pra janela normal e clique em "Verificar se a vítima logou".</li>
-    </ol>
+$path = trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH), '/');
 
-    <p>Experimente repetir o processo com o toggle "Modo seguro" ligado e desligado,
-    pra comparar o comportamento vulnerável com o corrigido
-    (<code>session_regenerate_id()</code>).</p>
+$rotas = [
+    ''             => 'home.php',
+    'index.php'    => 'home.php',
+    'login.php'    => 'login.php',
+    'logout.php'   => 'logout.php',
+    'account.php'  => 'account.php',
+    'reset.php'    => 'reset.php',
+    'attacker.php' => 'attacker.php',
+];
 
-    <a class="btn" href="attacker.php">Começar como Atacante →</a>
-</div>
-<?php
-render_footer();
+if (!array_key_exists($path, $rotas)) {
+    http_response_code(404);
+    echo 'Página não encontrada.';
+    exit;
+}
+
+require __DIR__ . '/pages/' . $rotas[$path];
